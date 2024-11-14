@@ -1,4 +1,4 @@
-# 4SC
+# 4S-Classifier
 Empowering Conservation through Semi-Supervised Learning for Endangered Species
 To address the issues of sparse samples and high anno-tation costs for rare species.
 ![Examples of sample counts for endangered versus common species](https://github.com/user-attachments/assets/161151f9-180a-4e58-b0d8-852eabf0d9bc)
