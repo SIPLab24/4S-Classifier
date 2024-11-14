@@ -3,6 +3,10 @@ import pickle
 import shutil
 import numpy as np
 from tqdm import tqdm
+import torch
+import torch.nn.functional as F
+from sklearn.mixture import GaussianMixture
+from scipy.stats import gaussian_kde
 
 from train_utils import AverageMeter, ce_loss, EMA, reduce_tensor, adjust_learning_rate
 from .fullmatch_utils import consistency_loss, cal_topK, nl_em_loss
@@ -10,11 +14,22 @@ from .fullmatch_utils import consistency_loss, cal_topK, nl_em_loss
 import megengine as mge
 import megengine.distributed as dist
 import megengine.autodiff as autodiff
-import megengine.functional as F
+import megengine.functional as F_mge
 
-class 4Sc:
-    def __init__(self, net_builder, num_classes, ema_m, p_cutoff, lambda_u, hard_label=True, t_fn=None, p_fn=None, it=0, num_eval_iter=8000, tb_log=None, logger=None):
+class SENet(torch.nn.Module):
+    def __init__(self, embedding_dim, reduction_ratio=16):
+        super(SENet, self).__init__()
+        self.fc1 = torch.nn.Linear(embedding_dim, embedding_dim // reduction_ratio)
+        self.fc2 = torch.nn.Linear(embedding_dim // reduction_ratio, embedding_dim)
 
+    def forward(self, x):
+        x = x.mean(dim=-1, keepdim=True)
+        x = F.relu(self.fc1(x))
+        x = torch.sigmoid(self.fc2(x))
+        return x
+
+class 4SC:
+    def __init__(self, net_builder, num_classes, ema_m, p_cutoff, lambda_u, hard_label=True, t_fn=None, p_fn=None, it=0, num_eval_iter=1000, tb_log=None, logger=None):
         super().__init__()
         self.loader = {}
         self.num_classes = num_classes
@@ -31,6 +46,8 @@ class 4Sc:
         self.logger = logger
         self.print_fn = print if logger is None else logger.info
 
+        self.senet = SENet(embedding_dim=num_classes)
+        self.W_gate = torch.nn.Parameter(torch.randn(num_classes, num_classes))
 
     def set_data_loader(self, loader_dict):
         self.loader_dict = loader_dict
@@ -80,49 +97,49 @@ class 4Sc:
         losses_npl = AverageMeter()
         losses_em = AverageMeter()
         mask_nums = AverageMeter()
-        p_bar = tqdm(range(args.num_eval_iter), disable=(args.gpu!=0))
-        start_iter = fake_epoch*self.num_eval_iter + 1
-        # import time
-        for cur_iter in range(start_iter, args.num_train_iter+1):
-            # start = time.perf_counter()
+        p_bar = tqdm(range(args.num_eval_iter), disable=(args.gpu != 0))
+        start_iter = fake_epoch * self.num_eval_iter + 1
+
+        for cur_iter in range(start_iter, args.num_train_iter + 1):
             try:
                 _, x_lb, y_lb = next(labeled_iter)
-            except:
+            except StopIteration:
                 labeled_iter = iter(self.loader_dict['train_lb'])
                 _, x_lb, y_lb = next(labeled_iter)
 
             try:
                 x_ulb_idx, x_ulb_w, x_ulb_s = next(unlabeled_iter)
-            except:
+            except StopIteration:
                 unlabeled_iter = iter(self.loader_dict['train_ulb'])
                 x_ulb_idx, x_ulb_w, x_ulb_s = next(unlabeled_iter)
 
             num_lb = x_lb.shape[0]
             num_ulb = x_ulb_w.shape[0]
             assert num_ulb == x_ulb_s.shape[0]
-            
+
             x_lb = mge.tensor(x_lb, dtype="float32")
             x_ulb_w = mge.tensor(x_ulb_w, dtype="float32")
             x_ulb_s = mge.tensor(x_ulb_s, dtype="float32")
             y_lb = mge.tensor(y_lb, dtype="int32")
 
-            inputs = F.concat((x_lb, x_ulb_w, x_ulb_s))
+            inputs = F_mge.concat((x_lb, x_ulb_w, x_ulb_s))
             with gm:
                 logits = self.model(inputs)
                 logits_x_lb = logits[:num_lb]
                 logits_x_ulb_w, logits_x_ulb_s = logits[num_lb:][:num_ulb], logits[num_lb:][num_ulb:]
-                assert logits_x_ulb_w.shape[0] == logits_x_ulb_s.shape[0]
                 sup_loss = ce_loss(logits_x_lb, y_lb, reduction='mean')
-                
-                unsup_loss, mask, select, pseudo_lb = consistency_loss(logits_x_ulb_s, logits_x_ulb_w, 'ce', self.p_cutoff, use_hard_labels=args.hard_label)
-                k_value = cal_topK(logits_x_ulb_s.detach(), logits_x_ulb_w.detach(), topk=(2,args.num_classes))
+
+                unsup_loss, mask, select, pseudo_lb = consistency_loss(
+                    logits_x_ulb_s, logits_x_ulb_w, 'ce', self.p_cutoff, use_hard_labels=args.hard_label
+                )
+                k_value = cal_topK(logits_x_ulb_s.detach(), logits_x_ulb_w.detach(), topk=(2, args.num_classes))
                 loss_npl, loss_em = nl_em_loss(logits_x_ulb_s, logits_x_ulb_w.detach(), k_value, select, self.p_cutoff)
 
                 if args.loss_warm and fake_epoch < 5:
                     total_loss = sup_loss + self.lambda_u * unsup_loss
                 else:
                     total_loss = sup_loss + self.lambda_u * unsup_loss + loss_npl + loss_em
-                
+
                 gm.backward(total_loss)
                 self.optimizer.step().clear_grad()
 
@@ -144,9 +161,10 @@ class 4Sc:
             losses_em.update(loss_em.item())
             mask_nums.update(mask.item())
 
-            p_bar.set_description("Train Epoch: {epoch}. Iter: {batch:4}. LR: {lr:.4f}. Loss: {loss:.4f}. Loss_x: {loss_x:.4f}. Loss_u: {loss_u:.4f}. Loss_n: {loss_n:.4f}. Loss_e: {loss_e:.4f}. Mask: {mask_nums:.4f}. K: {k_value: d}".format(
+            p_bar.set_description(
+                "Train Epoch: {epoch}. Iter: {batch:4}. LR: {lr:.4f}. Loss: {loss:.4f}. Loss_x: {loss_x:.4f}. Loss_u: {loss_u:.4f}. Loss_n: {loss_n:.4f}. Loss_e: {loss_e:.4f}. Mask: {mask_nums:.4f}. K: {k_value: d}".format(
                     epoch=fake_epoch,
-                    batch=cur_iter-self.num_eval_iter*fake_epoch,
+                    batch=cur_iter - self.num_eval_iter * fake_epoch,
                     lr=cur_lr,
                     loss=losses.avg,
                     loss_x=losses_sup.avg,
@@ -154,17 +172,18 @@ class 4Sc:
                     loss_n=losses_npl.avg,
                     loss_e=losses_em.avg,
                     mask_nums=mask_nums.avg,
-                    k_value=k_value))
+                    k_value=k_value,
+                )
+            )
             p_bar.update()
-                
+
             if cur_iter % self.num_eval_iter == 0:
                 p_bar.close()
                 tb_dict = {}
                 top1, top5 = self.evaluate(self.ema.ema, args=args)
-                if args.gpu==0:
+                if args.gpu == 0:
                     tb_dict['eval/1.top-1-acc'] = top1
                     tb_dict['eval/2.top-5-acc'] = top5
-
                     tb_dict['train/1.losses'] = losses.avg
                     tb_dict['train/2.losses_sup'] = losses_sup.avg
                     tb_dict['train/3.losses_unsup'] = losses_unsup.avg
@@ -182,10 +201,11 @@ class 4Sc:
                     self.print_fn('EVAL/Epoch_{}: TOP1: {}, TOP5: {}'.format(fake_epoch, top1, top5))
                     self.print_fn(f"BEST_EVAL_ACC: {best_eval_acc}, BEST_EVAL_TOP5_ACC: {best_eval5_acc}")
 
-                    if not self.tb_log is None:
+                    if self.tb_log is not None:
                         self.tb_log.update(tb_dict, fake_epoch)
 
-                    self.save_model({
+                    self.save_model(
+                        {
                             'acc': top1,
                             'best_acc': best_eval_acc,
                             'best_it': best_it,
@@ -195,7 +215,10 @@ class 4Sc:
                             'state_dict': self.model.state_dict(),
                             'ema_state_dict': self.ema.ema.state_dict(),
                             'optimizer': self.optimizer.state_dict(),
-                        }, (self.it==best_it), save_path)
+                        },
+                        (self.it == best_it),
+                        save_path,
+                    )
 
                 dist.group_barrier()
                 losses.reset()
@@ -204,13 +227,12 @@ class 4Sc:
                 losses_npl.reset()
                 losses_em.reset()
                 mask_nums.reset()
-                p_bar = tqdm(range(args.num_eval_iter), disable=(args.gpu!=0))
+                p_bar = tqdm(range(args.num_eval_iter), disable=(args.gpu != 0))
                 fake_epoch += 1
-                
-            self.it += 1
-            # print(time.perf_counter()-start)
 
-        if not self.tb_log is None:
+            self.it += 1
+
+        if self.tb_log is not None:
             self.tb_log.close()
 
     def evaluate(self, test_model, eval_loader=None, args=None):
@@ -224,12 +246,12 @@ class 4Sc:
             y = mge.tensor(y, dtype='int32')
             test_model.eval()
             logits = test_model(x)
-            prec1, prec5 = F.topk_accuracy(logits, y, topk=(1, 5)) 
+            prec1, prec5 = F_mge.topk_accuracy(logits, y, topk=(1, 5))
             if dist.get_world_size() > 1:
                 prec1 = reduce_tensor(prec1)
                 prec5 = reduce_tensor(prec5)
-            top1.update(prec1.item()*100., x.shape[0])
-            top5.update(prec5.item()*100., x.shape[0])
+            top1.update(prec1.item() * 100., x.shape[0])
+            top5.update(prec5.item() * 100., x.shape[0])
             batch_num += x.shape[0]
         return top1.avg, top5.avg
 
@@ -238,6 +260,6 @@ class 4Sc:
         mge.save(state, save_name)
         if is_best:
             shutil.copyfile(save_name, os.path.join(save_path, 'model_best.pkl'))
-        
+
 if __name__ == "__main__":
     pass
