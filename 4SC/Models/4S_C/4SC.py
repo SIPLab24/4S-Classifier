@@ -12,8 +12,8 @@ import megengine.distributed as dist
 import megengine.autodiff as autodiff
 import megengine.functional as F
 
-class FullMatch:
-    def __init__(self, net_builder, num_classes, ema_m, p_cutoff, lambda_u, hard_label=True, t_fn=None, p_fn=None, it=0, num_eval_iter=1000, tb_log=None, logger=None):
+class 4Sc:
+    def __init__(self, net_builder, num_classes, ema_m, p_cutoff, lambda_u, hard_label=True, t_fn=None, p_fn=None, it=0, num_eval_iter=8000, tb_log=None, logger=None):
 
         super().__init__()
         self.loader = {}
