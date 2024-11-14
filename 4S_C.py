@@ -14,7 +14,7 @@ import megengine.data as data
 
 from train_utils import TBLog, get_optimizer
 from utils import get_logger, net_builder, str2bool, over_write_args_from_file
-from models.4sc.4sc import 4SC
+from models.4sc.4s_c import 4SC
 from datasets.ssl_dataset import SSL_Dataset
 
 
