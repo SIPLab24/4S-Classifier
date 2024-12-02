@@ -1,9 +1,4 @@
 # 🌍🐾 **4SC: Semi-Supervised Learning for Species Conservation** 🐾🌍
-
-<p align="center">
-  <img src="https://via.placeholder.com/600x200?text=4SC+for+Species+Conservation" alt="4SC Logo" />
-</p>
-
 ---
 
 ## 🌟 Overview
