@@ -1,20 +1,157 @@
-# 4S-Classifier
-Empowering Conservation through Semi-Supervised Learning for Endangered Species
-To address the issues of sparse samples and high anno-tation costs for rare species.
-![Examples of sample counts for endangered versus common species](https://github.com/user-attachments/assets/161151f9-180a-4e58-b0d8-852eabf0d9bc)
+# 🌍🐾 **4SC: Semi-Supervised Learning for Species Conservation** 🐾🌍
 
-These models are less accurate when it comes to identifying rare species, such as the Black Grouse in England, the Spix's Macaw, and the Yangtze River dolphin. For these endangered or declared-extinct animals, labeled data is scarce, and the high cost of annotation makes it difficult for models to effectively capture their unique features during training.
+<p align="center">
+  <img src="https://via.placeholder.com/600x200?text=4SC+for+Species+Conservation" alt="4SC Logo" />
+</p>
 
-![Imbalanced species labels](https://github.com/user-attachments/assets/358c9f58-679b-4c9e-b9cc-46b575c98e94)The distribution of labeled and unlabeled data across different species categories. This figure illustrates the imbalanced representation of species labels in our dataset, highlighting the challenges faced in training models effectively due to the scarcity of labeled samples for certain endangered species.
+---
 
-# RSEmbed
-![RSEmbed](https://github.com/user-attachments/assets/e2bd702f-41e4-4b63-a085-bf3dc71779ff)
-Attention-based Rare Species Embedding.The At-tention Map from the pre-trained SE-Net,and Gates focuson specific dimensions, and their weights are used to fusethe embedding vectors of Rare Species samples with thoseof other samples.The above pathway represents the genera-tion of the feature map, while the below pathway represents the generation of the gate weight matrix.
+## 🌟 Overview
 
-The code can be found in RSM.
-# RSBank
-RSBank is a module we add into the baseline.
-![4SC](https://github.com/user-attachments/assets/9fad1e50-a920-40d8-a786-b41fcf47329f)
-Overview of proposed 4S-Classifier.The architecture of 4S-Classifier is an improvement over FullMatch, retaining only the ANL (Adaptive Negative Learning) and incorporating two methods we proposed: RSEmbed and RSBank. Here, we only present RSBank, and the process of RSEmbed will be detailed in subsequent sections with images.
+**4SC** (**Semi-Supervised Learning for Species Classification**) is a machine learning framework designed to aid **wildlife conservation efforts**. The repository combines **cutting-edge semi-supervised learning techniques** with domain-specific tools like **RSBank** and **RSEmbed** to tackle challenges in species classification, including:
 
-The code can be found in RSM.
+- 🌿 **Handling imbalanced datasets** (e.g., rare species underrepresentation)
+- 🐦 **Improving recognition of endangered species** with limited labeled data
+- 🌏 **Reducing pseudo-label biases** for unlabeled datasets
+
+Whether you're a researcher in machine learning or a wildlife conservationist, **4SC** provides powerful tools to accelerate your efforts in protecting biodiversity. 🌱
+
+---
+
+## 🌳 Key Features
+
+### 🦌 **Rare Species Bank (RSBank)**  
+A dedicated module for organizing and leveraging **rare species data** to ensure underrepresented species are effectively trained and classified.
+
+### 🦋 **Rare Species Embedding (RSEmbed)**  
+An **attention-based embedding mechanism** that enhances the model's ability to differentiate rare species by learning high-quality representations from both labeled and pseudo-labeled data.
+
+### 🐾 **4SC Model**  
+Our core **semi-supervised learning system** integrates RSBank and RSEmbed, along with advanced augmentation techniques, to deliver **state-of-the-art performance** on species classification tasks.
+
+### 🌿 **Augmentation Techniques**  
+Includes **RandAugment**, a data augmentation strategy to improve model robustness by generating diverse training samples.
+
+---
+
+## 🌍 Folder Structure
+
+```plaintext
+4SC/
+├── Models/
+│   ├── 4SC/
+│   │   ├── Nets/
+│   │   │   ├── 4SC.py         # Core implementation of the 4SC model
+│   │   │   ├── 4SC_utils.py   # Utility functions for 4SC
+│   ├── RSM/
+│   │   ├── RSB.py             # Rare Species Bank (RSBank) implementation
+│   │   ├── RSE.py             # Rare Species Embedding (RSEmbed) implementation
+│   ├── Semi_Models/
+│   │   ├── fullmatch.py       # Legacy model (FullMatch), serves as a baseline
+├── datasets/
+│   ├── augmentation/
+│   │   ├── randaugment.py     # RandAugment implementation
+│   │   ├── data_utils.py      # Utilities for dataset management
+│   ├── dataset.py             # Core dataset processing module
+│   ├── dataset_SSL.py         # Semi-supervised dataset utilities
+├── 4S_C.py                    # Main script to train and evaluate 4SC
+├── train_utils.py             # Training utilities and helpers
+├── utils.py                   # General-purpose utilities
+├── README.md                  # Project documentation (this file)
+├── LICENSE                    # License for the project
+```
+
+---
+
+## 🛠️ Installation
+
+### Requirements
+- 🐍 **Python >= 3.8**
+- 🧠 **MegEngine >= 1.9.0**
+- 🛠️ **PyYAML**
+- 📊 **TensorBoardX**
+
+### Installation Steps
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/your-repo/4SC.git
+   cd 4SC
+   ```
+2. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+---
+
+## 🚀 Getting Started
+
+### 🔧 Training the 4SC Model
+```bash
+python 4S_C.py --config your_config.yml
+```
+
+### 📝 Example Configuration File
+```yaml
+dataset: cifar10
+batch_size: 64
+learning_rate: 0.03
+num_epochs: 100
+augmentation: randaugment
+```
+
+### 📈 Evaluation
+```bash
+python 4S_C.py --eval --config your_config.yml
+```
+
+---
+
+## 🐾 Applications in Wildlife Conservation
+
+1. **Endangered Species Monitoring**: Train 4SC on datasets containing rare or endangered species to improve detection accuracy in the wild.  
+2. **Biodiversity Surveys**: Use the model to classify species across ecosystems for conservation studies.  
+3. **AI-Assisted Research**: Apply 4SC to analyze camera trap data or drone footage for real-time monitoring.
+
+---
+
+## 💡 Contributing
+
+We welcome contributions from the community! Please follow these steps:
+
+1. Fork the repository.
+2. Create a new branch for your feature:  
+   ```bash
+   git checkout -b feature-name
+   ```
+3. Commit your changes:  
+   ```bash
+   git commit -m "Add feature-name"
+   ```
+4. Push your branch:  
+   ```bash
+   git push origin feature-name
+   ```
+5. Open a **Pull Request** and describe your feature.
+
+---
+
+## 📜 License
+
+This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for details.
+
+---
+
+## 🌟 Acknowledgements
+
+This work supports global biodiversity efforts by providing advanced machine learning tools for species classification and monitoring. We acknowledge the researchers and developers who made this possible.
+
+<p align="center">💚 Let's save our planet, one species at a time. 💚</p>
+
+---
+
+## 📖 Citation
+
+If you use this repository in your research, please cite it as follows:
+
+```bibtex
