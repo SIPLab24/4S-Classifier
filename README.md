@@ -88,7 +88,7 @@ python 4S_C.py --config your_config.yml
 
 ### 📝 Example Configuration File
 ```yaml
-dataset: cifar10
+dataset: iNaturlist
 batch_size: 64
 learning_rate: 0.03
 num_epochs: 100
